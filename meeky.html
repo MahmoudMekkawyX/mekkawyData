@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>نظام بطاقات الديكور - مع صور في Excel</title>
+    <!-- Dexie (IndexedDB) -->
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
+    <!-- ExcelJS لتصدير Excel مع صور -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <!-- نحتاج ExcelJS حقيقياً -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <!-- FileSaver لحفظ الملف -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background: #f0f2f5; margin: 0; padding: 20px; color: #1e293b; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 28px; padding: 20px 24px 32px; box-shadow: 0 12px 30px rgba(0,0,0,0.1); }
+        h1 { font-size: 1.9rem; margin: 0 0 0.25rem; color: #0f3b2c; display: flex; flex-wrap: wrap; justify-content: space-between; border-bottom: 3px solid #e2e8f0; padding-bottom: 16px; }
+        h1 i { background: #1e7b5e; color: white; padding: 8px; border-radius: 50%; }
+        .header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+        .btn { border: none; padding: 10px 20px; border-radius: 40px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; background: #f1f5f9; }
+        .btn-primary { background: #1e7b5e; color: white; }
+        .btn-primary:hover { background: #166b51; }
+        .btn-success { background: #2c6e2f; color: white; }
+        .btn-danger { background: #dc2626; color: white; }
+        .search-bar { background: #f8fafc; padding: 12px 16px; border-radius: 60px; margin: 20px 0 18px; display: flex; gap: 12px; align-items: center; }
+        .search-bar input { flex: 1; padding: 10px 18px; border-radius: 40px; border: 1px solid #cbd5e1; }
+        .table-wrapper { overflow-x: auto; border-radius: 20px; border: 1px solid #e2e8f0; margin-top: 12px; background: white; }
+        table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+        th { background: #eef2ff; padding: 14px 8px; border-bottom: 2px solid #cbd5e1; }
+        td { padding: 12px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; text-align: center; }
+        .img-preview { width: 55px; height: 55px; object-fit: cover; border-radius: 12px; border: 1px solid #cbd5e1; display: block; margin: 0 auto 6px; }
+        .upload-img-btn { background: #e6f0ff; border: none; border-radius: 24px; font-size: 0.7rem; padding: 4px 10px; cursor: pointer; margin-top: 5px; }
+        .action-icons i { font-size: 1.2rem; margin: 0 5px; cursor: pointer; }
+        .fa-edit { color: #2563eb; }
+        .fa-trash-alt { color: #dc2626; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: white; max-width: 550px; width: 90%; border-radius: 32px; padding: 24px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 6px; }
+        .form-group input { width: 100%; padding: 10px; border-radius: 20px; border: 1px solid #cbd5e1; }
+        footer { margin-top: 25px; text-align: center; font-size: 0.8rem; color: #5b6e8c; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>
+        <span><i class="fas fa-id-card"></i> بطاقات قسم الديكور (مع صور في Excel)</span>
+        <div class="header-actions">
+            <button class="btn btn-primary" id="addNewBtn"><i class="fas fa-plus-circle"></i> بطاقة جديدة</button>
+            <button class="btn btn-success" id="exportExcelBtn"><i class="fas fa-file-excel"></i> تصدير إكسيل بالصور</button>
+            <button class="btn btn-danger" id="clearAllBtn"><i class="fas fa-trash-alt"></i> مسح الكل</button>
+        </div>
+    </h1>
+    <div class="search-bar">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchInput" placeholder="بحث بالاسم، الرقم القومي، العنوان، الوظيفة...">
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead><tr><th>#</th><th>رقم البطاقة</th><th>الرقم القومي</th><th>الاسم</th><th>الوظيفة</th><th>العنوان</th><th>صورة البطاقة</th><th>إجراءات</th></tr></thead>
+            <tbody id="tableBody"><tr><td colspan="8">جاري التحميل...</td></tr></tbody>
+        </table>
+    </div>
+    <footer>✅ قاعدة بيانات IndexedDB. ✅ عند تصدير Excel: ستظهر الصورة داخل الخلية (وليس نص base64). ✅ يمكنك تعديل أو حذف أي بطاقة.</footer>
+</div>
+
+<div id="cardModal" class="modal">
+    <div class="modal-content">
+        <h3 id="modalTitle"><i class="fas fa-address-card"></i> تسجيل بطاقة</h3>
+        <form id="cardForm">
+            <input type="hidden" id="recordId">
+            <div class="form-group"><label>رقم البطاقة</label><input type="text" id="cardNumber" required></div>
+            <div class="form-group"><label>الرقم القومي</label><input type="text" id="nationalId" required></div>
+            <div class="form-group"><label>الاسم</label><input type="text" id="fullName" required></div>
+            <div class="form-group"><label>الوظيفة</label><input type="text" id="jobTitle" required></div>
+            <div class="form-group"><label>العنوان</label><input type="text" id="address" required></div>
+            <div class="form-group"><label>صورة البطاقة</label><input type="file" id="cardImageUpload" accept="image/jpeg,image/png,image/jpg"><div id="imagePreviewModal" style="margin-top:8px;"></div></div>
+            <div style="display:flex; gap:12px;"><button type="submit" class="btn btn-primary">حفظ</button><button type="button" class="btn" id="closeModalBtn">إلغاء</button></div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // IndexedDB setup
+    const db = new Dexie("DecorCardsDB");
+    db.version(1).stores({ cards: "++id, cardNumber, nationalId, name, job, address, imageBase64" });
+
+    function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // convert base64 to ArrayBuffer for ExcelJS
+    function base64ToArrayBuffer(base64) {
+        const binaryString = atob(base64.split(',')[1]);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+        return bytes.buffer;
+    }
+
+    let allCards = [];
+    let currentSearch = "";
+
+    async function loadCards() { allCards = await db.cards.toArray(); renderTable(); }
+    
+    function renderTable() {
+        const tbody = document.getElementById("tableBody");
+        const term = currentSearch.trim().toLowerCase();
+        let filtered = allCards.filter(c => 
+            (c.cardNumber?.toLowerCase().includes(term) || false) ||
+            (c.nationalId?.toLowerCase().includes(term) || false) ||
+            (c.name?.toLowerCase().includes(term) || false) ||
+            (c.job?.toLowerCase().includes(term) || false) ||
+            (c.address?.toLowerCase().includes(term) || false)
+        );
+        if(filtered.length === 0) { tbody.innerHTML = `<tr><td colspan="8">📭 لا توجد بيانات</td></tr>`; return; }
+        let html = "";
+        filtered.forEach((card, idx) => {
+            const imgHtml = card.imageBase64 ? `<img src="${card.imageBase64}" class="img-preview">` : `<div style="font-size:11px; color:gray;">📄 لا توجد</div>`;
+            html += `<tr>
+                <td>${idx+1}</td>
+                <td>${escapeHtml(card.cardNumber) || '—'}</td>
+                <td>${escapeHtml(card.nationalId) || '—'}</td>
+                <td>${escapeHtml(card.name) || '—'}</td>
+                <td>${escapeHtml(card.job) || '—'}</td>
+                <td style="max-width:220px;">${escapeHtml(card.address) || '—'}</td>
+                <td><div style="display:flex; flex-direction:column; align-items:center;">${imgHtml}<input type="file" accept="image/*" class="row-img-upload" data-id="${card.id}" style="margin-top:6px; width:90px; font-size:10px;">${card.imageBase64 ? `<button class="upload-img-btn remove-img-row" data-id="${card.id}">🗑️ حذف الصورة</button>` : ''}</div></td>
+                <td class="action-icons"><i class="fas fa-edit edit-card" data-id="${card.id}"></i> <i class="fas fa-trash-alt delete-card" data-id="${card.id}"></i></td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+        document.querySelectorAll('.row-img-upload').forEach(inp => inp.addEventListener('change', async (e) => {
+            const id = Number(inp.dataset.id);
+            const file = e.target.files[0];
+            if(file) { const b64 = await fileToBase64(file); await db.cards.update(id, { imageBase64: b64 }); await loadCards(); }
+        }));
+        document.querySelectorAll('.remove-img-row').forEach(btn => btn.addEventListener('click', async (e) => {
+            const id = Number(btn.dataset.id);
+            await db.cards.update(id, { imageBase64: null });
+            await loadCards();
+        }));
+        attachActions();
+    }
+
+    function attachActions() {
+        document.querySelectorAll('.edit-card').forEach(el => el.addEventListener('click', async (e) => {
+            const id = Number(el.dataset.id);
+            const card = await db.cards.get(id);
+            if(card) openModal(card);
+        }));
+        document.querySelectorAll('.delete-card').forEach(el => el.addEventListener('click', async (e) => {
+            if(confirm("حذف البطاقة؟")) { await db.cards.delete(Number(el.dataset.id)); await loadCards(); }
+        }));
+    }
+
+    function openModal(card = null) {
+        resetModalForm();
+        if(card) {
+            document.getElementById("recordId").value = card.id;
+            document.getElementById("cardNumber").value = card.cardNumber;
+            document.getElementById("nationalId").value = card.nationalId;
+            document.getElementById("fullName").value = card.name;
+            document.getElementById("jobTitle").value = card.job;
+            document.getElementById("address").value = card.address;
+            if(card.imageBase64) document.getElementById("imagePreviewModal").innerHTML = `<img src="${card.imageBase64}" style="max-height:70px; border-radius:12px;">`;
+            document.getElementById("modalTitle").innerHTML = "<i class='fas fa-edit'></i> تعديل البطاقة";
+        } else {
+            document.getElementById("modalTitle").innerHTML = "<i class='fas fa-address-card'></i> تسجيل بطاقة جديدة";
+        }
+        document.getElementById("cardModal").style.display = "flex";
+    }
+
+    function resetModalForm() {
+        document.getElementById("recordId").value = "";
+        document.getElementById("cardNumber").value = "";
+        document.getElementById("nationalId").value = "";
+        document.getElementById("fullName").value = "";
+        document.getElementById("jobTitle").value = "";
+        document.getElementById("address").value = "";
+        document.getElementById("imagePreviewModal").innerHTML = "";
+        document.getElementById("cardImageUpload").value = "";
+    }
+
+    document.getElementById("addNewBtn").onclick = () => openModal(null);
+    document.getElementById("closeModalBtn").onclick = () => document.getElementById("cardModal").style.display = "none";
+    document.getElementById("cardForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const id = document.getElementById("recordId").value;
+        const cardNumber = document.getElementById("cardNumber").value.trim();
+        const nationalId = document.getElementById("nationalId").value.trim();
+        const name = document.getElementById("fullName").value.trim();
+        const job = document.getElementById("jobTitle").value.trim();
+        const address = document.getElementById("address").value.trim();
+        const file = document.getElementById("cardImageUpload").files[0];
+        let imageBase64 = null;
+        if(file) imageBase64 = await fileToBase64(file);
+        else if(id) { const existing = await db.cards.get(Number(id)); if(existing) imageBase64 = existing.imageBase64; }
+        const data = { cardNumber, nationalId, name, job, address, imageBase64 };
+        if(id) await db.cards.update(Number(id), data);
+        else await db.cards.add(data);
+        document.getElementById("cardModal").style.display = "none";
+        await loadCards();
+    });
+
+    document.getElementById("clearAllBtn").addEventListener("click", async () => {
+        if(confirm("⚠️ مسح كل البطاقات والصور نهائياً؟")) { await db.cards.clear(); await loadCards(); }
+    });
+
+    // تصدير Excel باستخدام ExcelJS مع الصور
+    document.getElementById("exportExcelBtn").addEventListener("click", async () => {
+        const cards = await db.cards.toArray();
+        if(!cards.length) { alert("لا توجد بيانات للتصدير"); return; }
+        
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("بطاقات الديكور");
+        
+        // تعريف الأعمدة
+        worksheet.columns = [
+            { header: "#", key: "index", width: 8 },
+            { header: "رقم البطاقة", key: "cardNumber", width: 15 },
+            { header: "الرقم القومي", key: "nationalId", width: 20 },
+            { header: "الاسم", key: "name", width: 25 },
+            { header: "الوظيفة", key: "job", width: 20 },
+            { header: "العنوان", key: "address", width: 45 },
+            { header: "صورة البطاقة", key: "image", width: 25 }
+        ];
+        
+        // تنسيق الرأس
+        worksheet.getRow(1).font = { bold: true };
+        worksheet.getRow(1).alignment = { horizontal: "center" };
+        
+        // إضافة البيانات
+        for(let i = 0; i < cards.length; i++) {
+            const card = cards[i];
+            const row = worksheet.addRow({
+                index: i+1,
+                cardNumber: card.cardNumber || "",
+                nationalId: card.nationalId || "",
+                name: card.name || "",
+                job: card.job || "",
+                address: card.address || "",
+                image: " "
+            });
+            row.getCell(7).alignment = { horizontal: "center", vertical: "middle" };
+            // إذا كانت الصورة موجودة، نضيفها إلى الخلية
+            if(card.imageBase64) {
+                try {
+                    const imageBuffer = base64ToArrayBuffer(card.imageBase64);
+                    const imageId = workbook.addImage({
+                        buffer: imageBuffer,
+                        extension: card.imageBase64.includes('png') ? 'png' : 'jpeg'
+                    });
+                    // إضافة الصورة في الخلية G (العمود 7)
+                    worksheet.addImage(imageId, {
+                        tl: { col: 6, row: i+1 },  // start column (0-index) -> col 6 = العمود السابع
+                        br: { col: 7, row: i+2 },
+                        editAs: 'oneCell'
+                    });
+                    // ضبط ارتفاع الصف ليناسب الصورة (حوالي 80 بكسل)
+                    row.height = 90;
+                } catch(err) { console.warn("خطأ في إضافة الصورة", err); }
+            } else {
+                row.getCell(7).value = "لا توجد صورة";
+                row.height = 20;
+            }
+        }
+        
+        // كتابة الملف وحفظه
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        saveAs(blob, `بطاقات_الديكور_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
+        alert("تم تصدير الملف بنجاح مع الصور داخل الخلايا ✅");
+    });
+
+    document.getElementById("searchInput").addEventListener("input", (e) => { currentSearch = e.target.value; renderTable(); });
+    window.onclick = (e) => { if(e.target === document.getElementById("cardModal")) document.getElementById("cardModal").style.display = "none"; };
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+    loadCards();
+</script>
+</body>
+</html>
