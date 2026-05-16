@@ -276,7 +276,7 @@
         // كتابة الملف وحفظه
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        saveAs(blob, `بطاقات_الديكور_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
+        saveAs(blob, `بطاقات_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
         alert("تم تصدير الملف بنجاح مع الصور داخل الخلايا ✅");
     });
 
